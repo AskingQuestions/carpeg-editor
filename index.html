@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<link rel="stylesheet" href="./main.css">
+
+		<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0-beta/css/materialize.min.css">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+		<script src="https://code.jquery.com/jquery-3.3.1.min.js" integrity="sha256-FgpCb/KJQlLNfOu91ta32o/NMZxltwRo8QtmkMRdAu8=" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0-beta/js/materialize.min.js"></script>
+
+		<script src="carbonite.js"></script>
+		<script src="carpeg.js"></script>
+		<script src="jquery.json-browse.js"></script>
+		<link href="jquery.json-browse.css" rel="stylesheet"/>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.2.8/ace.js" type="text/javascript" charset="utf-8"></script>
+	</head>
+
+	<body>
+		<div class="progress" style="position: absolute; top: 0; margin: 0; z-index: 10000; display: none;">
+			<div class="indeterminate"></div>
+		</div>
+		<div class="editor grey darken-4">
+			<div class="head grey darken-4">
+				
+			</div>
+			<div class="body grey darken-2">
+				<div class="pane vertical">
+					<div class="pane hoverable" id="peg"></div>
+					<div class="console" id="console"></div>
+				</div>
+				<div class="pane vertical grey darken-3">
+					<div class="pane hoverable" id="input"></div>
+					<div class="pane hoverable grey darken-4">
+						<pre id="output" class="white-text json-body"></pre>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="fixed-action-btn">
+			<a class="btn-floating btn-large">
+				<i class="large material-icons">mode_edit</i>
+			</a>
+			<ul>
+				<li><a class="btn-floating orange darken-1" id="theme"><i class="material-icons">invert_colors</i></a></li>
+				<li><a class="btn-floating teal modal-trigger" href="#export"><i class="material-icons">import_export</i></a></li>
+				<li><a class="btn-floating green darken-1" id="build"><i class="material-icons">play_arrow</i></a></li>
+			</ul>
+		</div>
+		
+		<div id="export" class="modal bottom-sheet">
+			<div class="modal-content">
+				<h4>Export parser</h4>
+				<p>Php support coming soon.</p>
+				<div class="input-field" style="max-width: 256px">
+					<select id="platform" class="icons">
+						<option value="" disabled selected>Platform</option>
+						<option value="javascript" data-icon="https://upload.wikimedia.org/wikipedia/commons/9/99/Unofficial_JavaScript_logo_2.svg">Javascript</option>
+						<option value="php" disabled data-icon="https://upload.wikimedia.org/wikipedia/commons/2/27/PHP-logo.svg">PHP</option>
+					</select>
+				</div>
+				<input type="text" class="input-field" value="ParserName" id="parser"/>
+			</div>
+			<div class="modal-footer">
+				<a id="download" href="#!" class="modal-close waves-effect waves-green btn-flat"><i class="material-icons left">
+					cloud_download</i> Download</a>
+			</div>
+		</div>
+	</body>
+
+	<script>
+		let download = false;
+		let fileExt = "js";
+		let parserName = "";
+
+		function downloadFile(code, fileName) {
+			let uri = "data:application/octet-stream;filename=" + fileName + "," + 
+            	encodeURIComponent(code);
+			
+			let link = document.createElement('a');
+			if (typeof link.download === 'string') {
+				document.body.appendChild(link);
+				link.download = fileName;
+				link.href = uri;
+				link.click();
+				document.body.removeChild(link);
+			}else{
+				location.replace(uri);
+			}
+		}
+
+		function giveError(err) {
+			if (err == false) {
+				$("#console").html("");
+				$("#console").removeClass("on error");
+			}else{
+				$("#console").addClass("on error");
+				$("#console").html(err);
+			}
+		}
+
+		function reParse() {
+			let out = DemoParser.parse(input.getValue());
+			if (out.hadError)
+				giveError("Parse error: Expected '" + out.error.expected + "' found '" + out.error.found + "' at " + out.error.line + ":" + out.error.column);
+			else {
+				giveError(false);
+				$('#output').jsonBrowse(out.data);
+			}
+		}
+
+		function buildGrammar() {
+			let worker = new Worker("worker.js");
+			$(".progress").show();
+			var old = Date.now();
+			worker.onmessage = function(code) {
+				$(".progress").hide();
+				if (code.data.error === false) {
+					M.toast({html: "<span class='green-text'>Success.</span><label>Built in " + ((Date.now() - old) / 1000).toFixed(1) + "s</label>"});
+					eval(code.data.code);
+
+					downloadFile(code.data.code, parserName + "." + fileExt);
+				}else
+					giveError(code.data.error);
+			};
+			worker.postMessage(editor.getValue());
+		}
+
+		M.AutoInit();
+
+		colorMode = "dark";
+
+		var editor = ace.edit("peg");
+		editor.getSession().setOptions({useSoftTabs: false, tabSize: 4});
+		editor.getSession().setMode("ace/mode/pig");
+
+		editor.setValue(localStorage.getItem("pegStore") || "");
+
+		editor.getSession().on('change', (e) => {
+			localStorage.setItem("pegStore", editor.getValue());
+		});
+
+		var input = ace.edit("input");
+		input.getSession().setOptions({useSoftTabs: false, tabSize: 4});
+		input.getSession().setMode("ace/mode/text");
+
+		input.setValue(localStorage.getItem("inputStore") || "");
+
+		input.getSession().on('change', (e) => {
+			localStorage.setItem("inputStore", input.getValue());
+			reParse();
+		});
+
+		$('#output').jsonBrowse({
+			
+		});
+
+		$("#download").click(() => {
+			if ($("#platform").val() == "javascript") {
+				download = true;
+
+				parserName = $("#parser").val();
+				buildGrammar();
+			}
+		});
+
+		$("#theme").click(() => {
+			colorMode = colorMode == "dark" ? "lighten" : "dark";
+			updateColorMode();
+		});
+
+		$("#build").click(() => {
+			buildGrammar();
+		});
+
+		updateColorMode();
+
+		function updateColorMode() {
+			if (colorMode == "dark") {
+				$(".lighten-4").removeClass("lighten-4").addClass("darken-4");
+				$(".lighten-2").removeClass("lighten-2").addClass("darken-2");
+				$(".lighten-3").removeClass("lighten-3").addClass("darken-3");
+				$(".black-text").removeClass("black-text").addClass("white-text");
+				editor.setTheme("ace/theme/chaos");
+				input.setTheme("ace/theme/monokai");
+			}else{
+				$(".darken-4").removeClass("darken-4").addClass("lighten-4");
+				$(".darken-2").removeClass("darken-2").addClass("lighten-2");
+				$(".darken-3").removeClass("darken-3").addClass("lighten-3");
+				$(".white-text").removeClass("white-text").addClass("black-text");
+				editor.setTheme("ace/theme/chrome");
+				input.setTheme("ace/theme/dawn");
+			}
+		}
+	</script>
+</html>
