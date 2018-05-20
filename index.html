@@ -24,16 +24,17 @@
 		</div>
 		<div class="editor grey darken-4">
 			<div class="head grey darken-4">
-				
+				<a class='dropdown-trigger right white-text' href='#' data-target='examples'>Examples <i style="vertical-align: bottom;" class="material-icons">highlight</i></a>
+				<ul id='examples' class='dropdown-content'></ul>
 			</div>
 			<div class="body grey darken-2">
 				<div class="pane vertical">
-					<div class="pane hoverable" id="peg"></div>
+					<div class="pane" id="peg"></div>
 					<div class="console" id="console"></div>
 				</div>
 				<div class="pane vertical grey darken-3">
-					<div class="pane hoverable" id="input"></div>
-					<div class="pane hoverable grey darken-4">
+					<div class="pane" id="input"></div>
+					<div class="pane grey darken-4">
 						<pre id="output" class="white-text json-body"></pre>
 					</div>
 				</div>
@@ -75,6 +76,51 @@
 		let fileExt = "js";
 		let parserName = "";
 
+		const carpegExamples = {
+			Css: `import WhiteSpace
+import String
+
+map|start = rules: (Rule/Keyframes)* _;
+
+map|Keyframes = _ "@keyframes" _ name: [^{ ]++ _ "{" _ rules: Rule* _ "}"
+	{type: "keyframes", name: {$name}, rules: {$rules}};
+
+map|Rule = _ selector: [^{ ]++ _ "{" _ props: Prop* _ "}"
+	{type: "rule", selector: {$selector}, props: {$props}};
+
+map|Prop = _ name: [^:} ]++ _ ":" _ value: [^; }]++ _ ";"
+	{name: {$name}, value: {$value}};`,
+			Json: `import WhiteSpace
+import String
+
+map|start = parsed: Json;
+
+map|Json = "{" _ keys: ( _ key: String _ ":" _ val: Json_Value _)*|"," _ "}" {map|
+for (var int i in $keys) {
+    var map k = $keys[i];
+    var string key = k["key"];
+    export[key] = k["val"];
+}};
+
+map|Json_Array = "[" _ vals: Json_Value*|"," _ "]" {map|export = $vals;};
+
+<map>array|Json_EmptyArray = "[" _ "]" {<map>array|~ = new <map>array();};
+
+map|Json_EmptyMap = "{" _ "}" {map|~ = new map();};
+
+int|Json_Value = _ exp: (("null" {empty|~ = empty;})
+/ ("true" {bool|~ = true;})
+/ ("false" {bool|~ = false;})
+/ Json_EmptyArray
+/ Json_EmptyMap
+/ Json_Array
+/ Json
+/ String
+/ Json_Number) _ {int|export = $exp;};
+
+int|Json_Number = nums: [0-9-.]++ {int|export = string.parseInt($nums);};`
+		};
+
 		function downloadFile(code, fileName) {
 			let uri = "data:application/octet-stream;filename=" + fileName + "," + 
             	encodeURIComponent(code);
@@ -91,6 +137,18 @@
 			}
 		}
 
+		function loadExamples() {
+			for (let key in carpegExamples) {
+				$("#examples").append("<li class='example'><a href='#css'>" + key + "</a></li>");
+			}
+		}
+
+		$(document).on("click", ".example", function () {
+			editor.setValue(carpegExamples[$(this).children("a").html()]);
+		});
+
+		loadExamples();
+
 		function giveError(err) {
 			if (err == false) {
 				$("#console").html("");
@@ -102,6 +160,11 @@
 		}
 
 		function reParse() {
+			if (typeof DemoParser == "undefined") {
+				giveError("warning: The grammer is unbuilt, press <i style='vertical-align: bottom;' class='material-icons'>edit</i> -> <i style='vertical-align: bottom;' class='material-icons'>play_arrow</i>");
+				return;
+			}
+
 			let out = DemoParser.parse(input.getValue());
 			if (out.hadError)
 				giveError("Parse error: Expected '" + out.error.expected + "' found '" + out.error.found + "' at " + out.error.line + ":" + out.error.column);
@@ -120,8 +183,8 @@
 				if (code.data.error === false) {
 					M.toast({html: "<span class='green-text'>Success.</span><label>Built in " + ((Date.now() - old) / 1000).toFixed(1) + "s</label>"});
 					eval(code.data.code);
-
-					downloadFile(code.data.code, parserName + "." + fileExt);
+					if (download)
+						downloadFile(code.data.code, parserName + "." + fileExt);
 				}else
 					giveError(code.data.error);
 			};
