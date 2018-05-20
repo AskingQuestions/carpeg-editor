@@ -188,7 +188,7 @@ int|Json_Number = nums: [0-9-.]++ {int|export = string.parseInt($nums);};`
 				}else
 					giveError(code.data.error);
 			};
-			worker.postMessage(editor.getValue());
+			worker.postMessage({grammar: editor.getValue(), name: parserName});
 		}
 
 		M.AutoInit();

@@ -1,7 +1,7 @@
 importScripts("carbonite.js", "carpeg.js");
 
 onmessage = (event) => {
-	postMessage(buildGrammar(event.data));
+	postMessage(buildGrammar(event.data.grammar, event.data.name));
 };
 
 function buildCarbonite(str, platform) {
@@ -20,9 +20,9 @@ function buildCarbonite(str, platform) {
 	return {code: c.rawOutput, error: c.status.hadError ? c.status.firstError.stringify() : false};
 }
 
-function buildGrammar(str) {
+function buildGrammar(str, name) {
 	let grammar = new Carpeg.grammar(str);
-	grammar.parserClass = "DemoParser";
+	grammar.parserClass = name || "DemoParser";
 	try {
 		var carbonOutput = grammar.generate();
 	}catch(e) {
