@@ -6,6 +6,6 @@
 
 A simple web based Carpeg editor for testing grammar.
 
-coming soon [Demo]()
+[Demo](https://www.echorial.com/carpeg/editor/)
 
 coming soon Images
