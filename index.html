@@ -24,6 +24,8 @@
 		</div>
 		<div class="editor grey darken-4">
 			<div class="head grey darken-4">
+				<img src="https://echorial.com/Images/carpeg.png" style="max-height: 100%"/>
+				<a class='right white-text' style="margin-left: 1em;" href='https://github.com/AskingQuestions/carpeg-editor'>GitHub <i style="vertical-align: bottom;" class="material-icons">call_split</i></a>
 				<a class='dropdown-trigger right white-text' href='#' data-target='examples'>Examples <i style="vertical-align: bottom;" class="material-icons">highlight</i></a>
 				<ul id='examples' class='dropdown-content'></ul>
 			</div>
@@ -183,6 +185,7 @@ int|Json_Number = nums: [0-9-.]++ {int|export = string.parseInt($nums);};`
 				if (code.data.error === false) {
 					M.toast({html: "<span class='green-text'>Success.</span><label>Built in " + ((Date.now() - old) / 1000).toFixed(1) + "s</label>"});
 					eval(code.data.code);
+					reParse();
 					if (download)
 						downloadFile(code.data.code, parserName + "." + fileExt);
 				}else
