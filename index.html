@@ -203,7 +203,8 @@ int|Json_Number = nums: [0-9-.]++ {int|export = string.parseInt($nums);};`
 		editor.getSession().setMode("ace/mode/pig");
 
 		editor.setValue(localStorage.getItem("pegStore") || "");
-
+		editor.setShowPrintMargin(false);
+		
 		editor.getSession().on('change', (e) => {
 			localStorage.setItem("pegStore", editor.getValue());
 		});
