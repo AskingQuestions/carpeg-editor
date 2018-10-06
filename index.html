@@ -166,7 +166,7 @@ int|Json_Number = nums: [0-9-.]++ {int|export = string.parseInt($nums);};`
 				giveError("warning: The grammer is unbuilt, press <i style='vertical-align: bottom;' class='material-icons'>edit</i> -> <i style='vertical-align: bottom;' class='material-icons'>play_arrow</i>");
 				return;
 			}
-
+			
 			let out = DemoParser.parse(input.getValue());
 			if (out.hadError)
 				giveError("Parse error: Expected '" + out.error.expected + "' found '" + out.error.found + "' at " + out.error.line + ":" + out.error.column);

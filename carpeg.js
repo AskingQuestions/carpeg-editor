@@ -131,6 +131,13 @@ Carpeg.context.prototype.doNext = function () {
 	}
 }
 
+Carpeg.context.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
 Carpeg.context.prototype.doError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'number' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
@@ -139,7 +146,7 @@ Carpeg.context.prototype.doError = function () {
 		if (this.doOverError) {
 
 			}else{
-				return "this.giveError(" + code + ", \"" + errorString + "\", " + char + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(errorString) + "\", " + char + ");";
 			}
 	}
 }
@@ -2688,7 +2695,7 @@ CarpegNativeParser.prototype.Class = function () {
 		escapeCodes["n"] = "\n";
 		escapeCodes["b"] = "";
 		escapeCodes["f"] = "";
-		escapeCodes["r"] = "\\r";
+		escapeCodes["r"] = "\r";
 		escapeCodes["t"] = "	";
 		escapeCodes["v"] = "";
 		escapeCodes["\\"] = "\\";
@@ -3960,7 +3967,7 @@ CarpegNativeParser.prototype.__ = function () {
 							charPos--;
 							this.offset--;
 							}else{
-								this.giveError(1, " , 	, \n, \n", currentChar);
+								this.giveError(1, " , 	, \r\n, \r\n", currentChar);
 							}
 					}
 				}
@@ -4069,7 +4076,7 @@ CarpegNativeParser.prototype.String_Double = function () {
 		escapeCodes["n"] = "\n";
 		escapeCodes["b"] = "";
 		escapeCodes["f"] = "";
-		escapeCodes["r"] = "\\r";
+		escapeCodes["r"] = "\r";
 		escapeCodes["t"] = "	";
 		escapeCodes["v"] = "";
 		escapeCodes["\\"] = "\\";
@@ -4160,7 +4167,7 @@ CarpegNativeParser.prototype.String_Single = function () {
 		escapeCodes["n"] = "\n";
 		escapeCodes["b"] = "";
 		escapeCodes["f"] = "";
-		escapeCodes["r"] = "\\r";
+		escapeCodes["r"] = "\r";
 		escapeCodes["t"] = "	";
 		escapeCodes["v"] = "";
 		escapeCodes["\\"] = "\\";
@@ -4893,6 +4900,8 @@ Carpeg.expression = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -4916,6 +4925,10 @@ Carpeg.expression = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -4956,6 +4969,7 @@ Carpeg.expression.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -5076,15 +5090,32 @@ Carpeg.expression.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expression.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expression.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expression.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -5118,6 +5149,13 @@ Carpeg.expression.prototype.error = function () {
 }
 
 Carpeg.expression.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expression.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -5218,6 +5256,8 @@ Carpeg.expressions.stringLiteral = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -5241,6 +5281,10 @@ Carpeg.expressions.stringLiteral = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -5296,7 +5340,7 @@ Carpeg.expressions.stringLiteral.prototype.generate = function () {
 			}
 		var out = [];
 		if (this.literal.length > 1) {
-			out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	var <int>array lit", this.context.checkerIndex, " = [", codes.join(", "), "];\n", "	if (currentCode == lit", this.context.checkerIndex, "[literalChar]) {\n", "		literalChar++;\n", "		if (literalChar == ", this.literal.length, ") {\n", "			", this.captureData("this.assembleCodes(lit" + this.context.checkerIndex + ")"), "\n", "			", this.callMove(), "\n", "			literalChar = 0;\n}\n", "			this.error.vested++;\n", "	}else{\n", "		", this.callError("1", "\" + this.assembleCodes(lit" + this.context.checkerIndex + ") + \"", "currentChar"), "\n", "	}\n", "}"];
+			out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	", this.callInject(), "	var <int>array lit", this.context.checkerIndex, " = [", codes.join(", "), "];\n", "	if (currentCode == lit", this.context.checkerIndex, "[literalChar]) {\n", "		literalChar++;\n", "		if (literalChar == ", this.literal.length, ") {\n", "			", this.captureData("this.assembleCodes(lit" + this.context.checkerIndex + ")"), "\n", "			", this.callMove(), "\n", "			literalChar = 0;\n}\n", "			this.error.vested++;\n", "	}else{\n", "		", this.callError("1", "\" + this.assembleCodes(lit" + this.context.checkerIndex + ") + \"", "currentChar"), "\n", "	}\n", "}"];
 			}else{
 				var disp = this.literal;
 				if (this.literal == "\"") {
@@ -5327,6 +5371,7 @@ Carpeg.expressions.stringLiteral.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -5447,15 +5492,32 @@ Carpeg.expressions.stringLiteral.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.stringLiteral.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.stringLiteral.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.stringLiteral.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -5477,6 +5539,13 @@ Carpeg.expressions.stringLiteral.prototype.error = function () {
 }
 
 Carpeg.expressions.stringLiteral.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.stringLiteral.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -5577,6 +5646,8 @@ Carpeg.expressions.ruleRef = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -5600,6 +5671,10 @@ Carpeg.expressions.ruleRef = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -5655,9 +5730,9 @@ Carpeg.expressions.ruleRef.prototype.generate = function () {
 			upVest = "";
 			}
 		if (this.parentExpression.expressionType == "zero_or_more") {
-			vestedError = "if (" + outCast + ".error.vested > 1) {this.giveError(" + outCast + ".error.code, " + outCast + ".error.expected, " + outCast + ".error.found);}";
+			vestedError = "if (" + outCast + ".error.vested > 1) {this.giveError(" + outCast + ".error.code, " + outCast + ".error.expected, " + outCast + ".error.found); Exception.throw('Vested error');}";
 			}
-		var out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	var <", outputType, ">", this.grammar.parserClass, "Output ruleOut", this.context.checkerIndex, " = this.", this.rule, "(input, charPos);\n", "	\nif (ruleOut", this.context.checkerIndex, ".hadError) {\n", "		", this.callError("ruleOut" + this.context.checkerIndex + ".error.code", rule.display() + "(\" + ruleOut" + this.context.checkerIndex + ".error.expected + \")", "ruleOut" + this.context.checkerIndex + ".error.found") + "\n", "		", vestedError, "\n", "	}else{\n", "		var ", outputType, " ruleOutCast", this.context.checkerIndex, " = ruleOut", this.context.checkerIndex, ".data[\"data\"];\ncharPos = this.offset;\n", "		", this.captureData("ruleOutCast" + this.context.checkerIndex), "\n", "		", this.callMove(), "\n", "		", upVest, "\n", "	}\n", "}"];
+		var out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	this.depth++; ", this.callInject(), "	var <", outputType, ">", this.grammar.parserClass, "Output ruleOut", this.context.checkerIndex, " = this.", this.rule, "(input, charPos);\n", "	\nif (ruleOut", this.context.checkerIndex, ".hadError) {\n", "		", this.callError("ruleOut" + this.context.checkerIndex + ".error.code", rule.display() + "(\" + ruleOut" + this.context.checkerIndex + ".error.expected + \")", "ruleOut" + this.context.checkerIndex + ".error.found") + "\n", "		", vestedError, "\n", "	}else{\n", "		var ", outputType, " ruleOutCast", this.context.checkerIndex, " = ruleOut", this.context.checkerIndex, ".data[\"data\"];\ncharPos = this.offset;\n", "		", this.captureData("ruleOutCast" + this.context.checkerIndex), "\n", "		", this.callMove(), "\n", "		", upVest, "\n", "	}\n this.depth--;", "}"];
 		return out.join("");
 	}
 }
@@ -5690,6 +5765,7 @@ Carpeg.expressions.ruleRef.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -5810,15 +5886,32 @@ Carpeg.expressions.ruleRef.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.ruleRef.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.ruleRef.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.ruleRef.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -5840,6 +5933,13 @@ Carpeg.expressions.ruleRef.prototype.error = function () {
 }
 
 Carpeg.expressions.ruleRef.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.ruleRef.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -5946,6 +6046,8 @@ Carpeg.expressions.classCapture = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -5969,6 +6071,10 @@ Carpeg.expressions.classCapture = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -6009,6 +6115,12 @@ Carpeg.expressions.classCapture.prototype.display = function () {
 			}
 		for (var i = 0; i < this.literals.length; i++) {
 			var char = this.literals[i];
+			if (char == "\n") {
+				char = "nl";
+				}
+			if (char == "\r") {
+				char = "rc";
+				}
 			things.push(char);
 			}
 		return things.join(", ");
@@ -6043,7 +6155,7 @@ Carpeg.expressions.classCapture.prototype.generate = function () {
 			literal.push("if (currentCode == " + code + ") {passed" + this.context.checkerIndex + " = true;}");
 			}
 		if (false) {
-			var out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	var bool passed", this.context.checkerIndex, " = false;\n", "	for (var int rangeIndex in ranges", this.context.checkerIndex, ") {\n", "		var <int>array currentRange = ranges", this.context.checkerIndex, "[rangeIndex];\nif (currentCode >= currentRange[0]) {if (currentCode <= currentRange[1]) {passed", this.context.checkerIndex, " = true;break;}}\n", "	}\n", "	if (passed", this.context.checkerIndex, " == false) {for (var int literalIndex in literals", this.context.checkerIndex, ") {\n", "		var int currentLiteral = literals", this.context.checkerIndex, "[literalIndex];\nif (currentCode == currentLiteral) {passed", this.context.checkerIndex, " = true;break;}\n", "	}}\n", "	if (passed", this.context.checkerIndex, ") {\n", "		", this.captureData("currentChar"), "\n", "		", this.callMove(), "\n", "\n	}else{\n", "		", this.callError("1", this.display(), "currentChar"), "\n", "	}\n", "}"];
+			var out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	", this.callInject(), "	var bool passed", this.context.checkerIndex, " = false;\n", "	for (var int rangeIndex in ranges", this.context.checkerIndex, ") {\n", "		var <int>array currentRange = ranges", this.context.checkerIndex, "[rangeIndex];\nif (currentCode >= currentRange[0]) {if (currentCode <= currentRange[1]) {passed", this.context.checkerIndex, " = true;break;}}\n", "	}\n", "	if (passed", this.context.checkerIndex, " == false) {for (var int literalIndex in literals", this.context.checkerIndex, ") {\n", "		var int currentLiteral = literals", this.context.checkerIndex, "[literalIndex];\nif (currentCode == currentLiteral) {passed", this.context.checkerIndex, " = true;break;}\n", "	}}\n", "	if (passed", this.context.checkerIndex, ") {\n", "		", this.captureData("currentChar"), "\n", "		", this.callMove(), "\n", "\n	}else{\n", "		", this.callError("1", this.display(), "currentChar"), "\n", "	}\n", "}"];
 			}
 		var onPass = this.captureData("currentChar") + "\n" + this.callMove();
 		var onError = this.callError("1", this.display(), "currentChar");
@@ -6088,7 +6200,7 @@ Carpeg.expressions.classCapture.prototype.build = function () {
 			for (var j = 0; j < this.literals.length; j++) {
 				var cast = this.literals[j];
 				if (cast == "\\r") {
-					cast = "\\r";
+					cast = "\r";
 					}
 				literal.push("if (currentCode == " + cast.charCodeAt(0) + ") {passed" + this.context.checkerIndex + " = true;}");
 				}
@@ -6114,6 +6226,7 @@ Carpeg.expressions.classCapture.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -6234,15 +6347,32 @@ Carpeg.expressions.classCapture.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.classCapture.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.classCapture.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.classCapture.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -6264,6 +6394,13 @@ Carpeg.expressions.classCapture.prototype.error = function () {
 }
 
 Carpeg.expressions.classCapture.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.classCapture.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -6366,6 +6503,8 @@ Carpeg.expressions.native = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -6389,6 +6528,10 @@ Carpeg.expressions.native = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -6461,7 +6604,7 @@ Carpeg.expressions.native.prototype.generate = function () {
 		code = code.replace(new RegExp("[\\@](capture)\\(\\s*([^)]*)\\s*\\)", 'g'), this.captureData("$2"));
 		code = code.replace(new RegExp("[\\@](error)\\(\\s*([0-9]*)\\s*,\\s*([^,]*)\\s*,\\s*([^)]*)\\s*\\)", 'g'), this.callError("$2", "\" + $3 + \"", "$4"));
 		var out = [];
-		out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	var ", this.outputType, " ", cast, " = ", this.captureRoot(), "[\"", this.parentLabel, "\"];\n", "	", casterCode, "\n", "	", code, "\n}"];
+		out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	", this.callInject(), "	var ", this.outputType, " ", cast, " = ", this.captureRoot(), "[\"", this.parentLabel, "\"];\n", "	", casterCode, "\n", "	", code, "\n}"];
 		return out.join("");
 	}
 }
@@ -6487,6 +6630,7 @@ Carpeg.expressions.native.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -6607,15 +6751,32 @@ Carpeg.expressions.native.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.native.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.native.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.native.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -6637,6 +6798,13 @@ Carpeg.expressions.native.prototype.error = function () {
 }
 
 Carpeg.expressions.native.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.native.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -6735,6 +6903,8 @@ Carpeg.expressions.any = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -6758,6 +6928,10 @@ Carpeg.expressions.any = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -6804,7 +6978,7 @@ Carpeg.expressions.any.prototype.generate = function () {
 			this.context.next = 2;
 			}
 		var out = [];
-		out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	if (currentChar == \"\\u0001\") {\n", "		", this.callError("1", this.display(), "currentChar"), "\n", "	}else{\n", "		", this.captureData("currentChar"), "\n", "		", this.callMove(), "\n", "		this.error.vested++;\n", "	}", "}"];
+		out = [elser, " (c == ", this.context.checkerIndex, ") {\n", "	", this.callInject(), "	if (currentChar == \"\\u0001\") {\n", "		", this.callError("1", this.display(), "currentChar"), "\n", "	}else{\n", "		", this.captureData("currentChar"), "\n", "		", this.callMove(), "\n", "		this.error.vested++;\n", "	}", "}"];
 		return out.join("");
 	}
 }
@@ -6827,6 +7001,7 @@ Carpeg.expressions.any.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -6947,15 +7122,32 @@ Carpeg.expressions.any.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.any.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.any.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.any.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -6977,6 +7169,13 @@ Carpeg.expressions.any.prototype.error = function () {
 }
 
 Carpeg.expressions.any.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.any.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -7077,6 +7276,8 @@ Carpeg.expressions.sequence = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -7100,6 +7301,10 @@ Carpeg.expressions.sequence = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -7183,6 +7388,7 @@ Carpeg.expressions.sequence.prototype.build = function () {
 			var out = Carpeg.expression.make(data);
 			out.apply(this);
 			out.context = new Carpeg.context();
+			out.depth = this.depth + 1;
 			out.context.hasAction = this.context.hasAction;
 			out.context.action = this.context.action;
 			out.context.childLabels = this.context.childLabels;
@@ -7244,6 +7450,7 @@ Carpeg.expressions.sequence.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -7349,15 +7556,32 @@ Carpeg.expressions.sequence.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.sequence.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.sequence.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.sequence.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -7379,6 +7603,13 @@ Carpeg.expressions.sequence.prototype.error = function () {
 }
 
 Carpeg.expressions.sequence.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.sequence.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -7483,6 +7714,8 @@ Carpeg.expressions.choice = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -7506,6 +7739,10 @@ Carpeg.expressions.choice = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -7562,7 +7799,7 @@ Carpeg.expressions.choice.prototype.generate = function () {
 Carpeg.expressions.choice.prototype.move = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
-		return this.parentRule.moveNext(this.context.next);
+		return "this.depth--;" + this.parentRule.moveNext(this.context.next);
 	}
 }
 
@@ -7577,10 +7814,17 @@ Carpeg.expressions.choice.prototype.error = function () {
 			ctx = 2;
 			}
 		if (exp.context.checkerIndex == this.last) {
-			return this.callError("1", this.display(), "currentChar");
+			return "this.depth--; " + this.callError("1", this.display(), "currentChar");
 			}else{
-				return this.parentRule.moveNext(ctx) + " charPos--; this.offset--;";
+				return "this.depth--; " + this.parentRule.moveNext(ctx) + " charPos--; this.offset--;";
 			}
+	}
+}
+
+Carpeg.expressions.choice.prototype.inject = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+		return "this.groupErrors(); this.depth++;\n";
 	}
 }
 
@@ -7598,6 +7842,7 @@ Carpeg.expressions.choice.prototype.build = function () {
 			out.context.action = this.context.action;
 			out.context.childLabels = this.context.childLabels;
 			out.context.clone(this.context);
+			out.depth = this.depth + 1;
 			var subType = data["type"];
 			out.context.checkerIndex = this.parentRule.checkerIndex;
 			out.context.firstChild = out;
@@ -7610,6 +7855,8 @@ Carpeg.expressions.choice.prototype.build = function () {
 					out.directLabel = true;
 				}
 			var conv = i;
+			out.doInject = true;
+			out.overInject = this;
 			if (parseInt(conv) != expressions.length - 1) {
 				out.doError = true;
 				out.overError = this;
@@ -7658,6 +7905,7 @@ Carpeg.expressions.choice.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -7778,15 +8026,32 @@ Carpeg.expressions.choice.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.choice.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.choice.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.choice.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -7893,6 +8158,8 @@ Carpeg.expressions.group = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.complexChild = false;
@@ -7914,6 +8181,10 @@ Carpeg.expressions.group = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -7985,6 +8256,7 @@ Carpeg.expressions.group.prototype.build = function () {
 		var data = this.baked["expression"];
 		this.expression = Carpeg.expression.make(data);
 		this.expression.apply(this);
+		this.expression.depth = this.depth + 1;
 		this.expression.context = new Carpeg.context();
 		this.expression.context.copyOverrides(this.context);
 		this.expression.context.hasAction = this.context.hasAction;
@@ -8012,6 +8284,7 @@ Carpeg.expressions.group.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -8125,15 +8398,32 @@ Carpeg.expressions.group.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.group.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.group.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.group.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -8155,6 +8445,13 @@ Carpeg.expressions.group.prototype.error = function () {
 }
 
 Carpeg.expressions.group.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.group.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -8257,6 +8554,8 @@ Carpeg.expressions.labeled = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -8280,6 +8579,10 @@ Carpeg.expressions.labeled = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -8373,6 +8676,7 @@ Carpeg.expressions.labeled.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -8480,15 +8784,32 @@ Carpeg.expressions.labeled.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.labeled.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.labeled.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.labeled.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -8504,6 +8825,13 @@ Carpeg.expressions.labeled.prototype.error = function () {
 }
 
 Carpeg.expressions.labeled.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.labeled.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -8604,6 +8932,8 @@ Carpeg.expressions.optional = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -8627,6 +8957,10 @@ Carpeg.expressions.optional = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -8683,8 +9017,17 @@ Carpeg.expressions.optional.prototype.build = function () {
 		this.expression.directLabel = this.directLabel;
 		this.expression.doError = true;
 		this.expression.overError = this;
+		this.expression.doInject = true;
+		this.expression.overInject = this;
 		this.expression.build();
 		this.outputType = this.expression.outputType;
+	}
+}
+
+Carpeg.expressions.optional.prototype.inject = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+		return "this.groupErrors();\n";
 	}
 }
 
@@ -8705,7 +9048,7 @@ Carpeg.expressions.optional.prototype.error = function () {
 		if (this.parentRule.checkerIndex == 0) {
 			ctx = 2;
 			}
-		return this.parentRule.moveNext(ctx) + " charPos--; this.offset--;";
+		return "this.popGroup(); " + this.parentRule.moveNext(ctx) + " charPos--; this.offset--;";
 	}
 }
 
@@ -8717,6 +9060,7 @@ Carpeg.expressions.optional.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -8830,15 +9174,32 @@ Carpeg.expressions.optional.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.optional.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.optional.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.optional.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -8950,6 +9311,8 @@ Carpeg.expressions.not = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -8973,6 +9336,10 @@ Carpeg.expressions.not = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -9070,6 +9437,7 @@ Carpeg.expressions.not.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -9175,15 +9543,32 @@ Carpeg.expressions.not.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.not.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.not.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.not.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -9195,6 +9580,13 @@ Carpeg.expressions.not.prototype.resetAllCaptureData = function () {
 }
 
 Carpeg.expressions.not.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.not.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -9299,6 +9691,8 @@ Carpeg.expressions.action = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -9322,6 +9716,10 @@ Carpeg.expressions.action = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -9491,6 +9889,7 @@ Carpeg.expressions.action.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -9596,15 +9995,32 @@ Carpeg.expressions.action.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.action.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.action.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.action.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
 	}
 }
@@ -9626,6 +10042,13 @@ Carpeg.expressions.action.prototype.error = function () {
 }
 
 Carpeg.expressions.action.prototype.move = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
+	}
+}
+
+Carpeg.expressions.action.prototype.inject = function () {
 	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
 		var exp = arguments[0];
 
@@ -9736,6 +10159,8 @@ Carpeg.expressions.list = function () {
 
 	this.realCaptureTo = 0;
 
+	this.depth = 0;
+
 	this.expressionType = "";
 
 	this.isComplex = false;
@@ -9759,6 +10184,10 @@ Carpeg.expressions.list = function () {
 	this.directLabel = false;
 
 	this.isLabeled = false;
+
+	this.doInject = false;
+
+	this.overInject = null;
 
 	this.doMove = false;
 
@@ -9965,6 +10394,7 @@ Carpeg.expressions.list.prototype.copy = function () {
 		this.isLabeled = exp.isLabeled;
 		this.doError = exp.doError;
 		this.overError = exp.overError;
+		this.overInject = null;
 		this.doMove = exp.doMove;
 		this.overMove = exp.overMove;
 		this.captureTo = exp.captureTo;
@@ -10063,16 +10493,40 @@ Carpeg.expressions.list.prototype.callMove = function () {
 	}
 }
 
+Carpeg.expressions.list.prototype.escapeExpected = function () {
+	if (arguments.length == 1 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var ex = arguments[0];
+		return ex.replace(new RegExp("\n".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "New line").replace(new RegExp("\r".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\r").replace(new RegExp("	".replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&'), 'g'), "\\t");
+	}
+}
+
+Carpeg.expressions.list.prototype.callInject = function () {
+	if (arguments.length == 0) {
+		if (this.doInject) {
+			return this.overInject.inject(this);
+			}else{
+				return "";
+			}
+	}
+}
+
 Carpeg.expressions.list.prototype.callError = function () {
 	if (arguments.length == 3 && (typeof arguments[0] == 'string' || typeof arguments[0] == 'undefined' || arguments[0] === null) && (typeof arguments[1] == 'string' || typeof arguments[1] == 'undefined' || arguments[1] === null) && (typeof arguments[2] == 'string' || typeof arguments[2] == 'undefined' || arguments[2] === null)) {
 		var code = arguments[0];
 		var expected = arguments[1];
 		var found = arguments[2];
 		if (this.doError) {
-			return this.overError.error(this, code, expected, found);
+			return this.overError.error(this, code, this.escapeExpected(expected), found);
 			}else{
-				return "this.giveError(" + code + ", \"" + expected + "\", " + found + ");";
+				return "this.giveError(" + code + ", \"" + this.escapeExpected(expected) + "\", " + found + ");";
 			}
+	}
+}
+
+Carpeg.expressions.list.prototype.inject = function () {
+	if (arguments.length == 1 && ((arguments[0] instanceof Carpeg.expression || (arguments[0] instanceof Carpeg.expressions.stringLiteral) || (arguments[0] instanceof Carpeg.expressions.ruleRef) || (arguments[0] instanceof Carpeg.expressions.classCapture) || (arguments[0] instanceof Carpeg.expressions.native) || (arguments[0] instanceof Carpeg.expressions.any) || (arguments[0] instanceof Carpeg.expressions.sequence) || (arguments[0] instanceof Carpeg.expressions.choice) || (arguments[0] instanceof Carpeg.expressions.group) || (arguments[0] instanceof Carpeg.expressions.labeled) || (arguments[0] instanceof Carpeg.expressions.optional) || (arguments[0] instanceof Carpeg.expressions.not) || (arguments[0] instanceof Carpeg.expressions.action) || (arguments[0] instanceof Carpeg.expressions.list)) || typeof arguments[0] == 'undefined' || arguments[0] === null)) {
+		var exp = arguments[0];
+
 	}
 }
 
@@ -10391,7 +10845,7 @@ Carpeg.grammar.prototype.generate = function () {
 				}
 			}
 		var outputType = this.getRuleOutput("start");
-		var output = ["class ", this.parserClass, "Location {\n", "bound public int offset = 0;\n", "bound public int line = 1;\n", "bound public int column = 0;\n", "fixed public <", this.parserClass, "Location>function @construct(int offset, int line, int column) {\n", "this.offset = offset; this.line = line; this.column = column;\n", "}\n", "}\n\n", "class ", this.parserClass, "Error inherits ", this.parserClass, "Location {\n", "bound public int code = 0;\n", "bound public string found = 0;\n", "bound public string expected = 0;\n", "bound public int vested = 0;\n", "bound public <", this.parserClass, "Error>array path = new <", this.parserClass, "Error>array();\n", "bound public <", this.parserClass, "Error>function clone() {var ", this.parserClass, "Error clone = new ", this.parserClass, "Error(this.offset, this.line, this.column); clone.code = this.code; clone.found = this.found; clone.expected = this.expected; clone.vested = this.vested; for (var int i in this.path) {var ", this.parserClass, "Error current = this.path[i]; clone.path.push(current.clone());} return clone;}", "}\n\n", "class <class T>", this.parserClass, "Output {\n", "	fixed public <<T>", this.parserClass, "Output>function @construct(bool hadError, ", this.parserClass, "Error error, map data) {this.hadError = hadError; this.error = error; this.data = data;}\n", "	bound public ", this.parserClass, "Error error = empty;\n", "	bound public bool hadError = false;\n", "	bound public map data = new map();\n", "}\n", "class ", this.parserClass, " inherits ", this.parserClass, "Location {\n", "fixed public override <", this.parserClass, ">function @construct() {}\n", "fixed public <<", outputType, ">", this.parserClass, "Output>function parse(string input) {", "	var <", outputType, ">", this.parserClass, " parser = new <", outputType, ">", this.parserClass, "();\n", "	var ", outputType, " output = parser.start(input);\n", "	if (parser.hadError and (parser.error.found == string.fromCharCode(0001))) {\n", "		parser.error.found = \"End of input\";\n", "}\n", "	var <", outputType, ">", this.parserClass, "Output rtn = new <", outputType, ">", this.parserClass, "Output(parser.hadError, parser.error, parser.data[\"data\"]);\n", "	return rtn;\n", "}\n", "fixed public <<", outputType, ">", this.parserClass, "Output>function parse(string rule, string input) {", "	var <", outputType, ">", this.parserClass, " parser = new <", outputType, ">", this.parserClass, "();\n", "	input += string.fromCharCode(0001);\n", "	parser.currentInput = input;\n", "	parser.data[\"data\"] = new ", outputType, "();\n", "	var <", outputType, ">", this.parserClass, "Output output = null;\n", "	", ruleChecks.join("else"), "\n	if (parser.hadError and (parser.error.found == string.fromCharCode(0001))) {\n", "		parser.error.found = \"End of input\";\n", "	}\n", "	for (var int i = 0; i < parser.error.offset; i++) {\n", "		parser.error.column++;\n", "		if (i < parser.currentInput.length)", "		if (parser.currentInput[i] == \"\\n\") {parser.error.line++; parser.error.column = 0;}\n", "	}\n", "	var <", outputType, ">", this.parserClass, "Output rtn = new <", outputType, ">", this.parserClass, "Output(output.hadError, output.error, output.data);\n", "	return rtn;\n", "}\n", "bound public <", this.parserClass, "Error>array lastErrors = new <", this.parserClass, "Error>array();\n", "bound public bool hadError = false;\n", "bound public int parsedChars = 0;\n", "bound public string currentInput = new string();\n", "bound public map data = new map();\n", "bound public ", this.parserClass, "Error error = new ", this.parserClass, "Error(0, 0, 0);\n", "bound public <string>function assembleCodes(<int>array codes) {\n", "	var string rtn = new string();\n", "	for (var int i in codes) {\n", "		rtn += string.fromCharCode(codes[i]);\n", "	}\n", "	return rtn;", "}\n", "bound public <void>function giveError(int code, string expected, string found) {\n", "this.hadError = true;\n", "this.error.code = code;\n", "this.error.expected = expected;\n", "this.error.found = found;\n", "this.error.offset = this.offset;\n", "this.error.line = 1;\n", "this.error.column = 0;\n", "}\n\n", "bound public <void>function start(string input) {\n", "	this.currentInput = input;\n", "	input += string.fromCharCode(0001);", "	this.data[\"data\"] = new ", outputType, "();\n", "	var ", outputType, " data = this.data[\"data\"];\n", "	var int c = 0;\n", "	", initializer, "\n", "	", this.captures.join("\n"), "	", startRule.initializers.join(""), "	var int literalChar = 0;\n", "	for (var int charPos = 0; charPos < input.length(); charPos++) {\n", "		var string currentChar = input[charPos];\n", "		var int currentCode = input.charCodeAt(charPos);\n", "		if (c == 0 - 1) {if (currentChar != string.fromCharCode(0001)) {this.giveError(2, \"EOF\", currentChar);}}\n", "		if (currentCode == 10) {this.line++; this.column = 0;}\n", "		", ruleOutput.join("\n\n"), "		this.offset++; \n this.column++;\n", "		if (this.hadError) {break;}\n", "	}\n", "	for (var int i = 0; i < this.error.offset; i++) {\n", "		this.error.column++;\n", "		if (i < this.currentInput.length)", "		if (this.currentInput[i] == \"\\n\") {this.error.line++; this.error.column = 0;}\n", "	}\n", "	if (false and this.hadError == false) {\n", "		if (this.offset < input.length() - 1) {\n", "			this.giveError(2, \"EOF\", input[this.offset + 1]);", "		}\n", "	}\n", "}\n", this.doOtherRules(), "}"];
+		var output = ["class ", this.parserClass, "Location {\n", "bound public int offset = 0;\n", "bound public int line = 1;\n", "bound public int column = 0;\n", "fixed public <", this.parserClass, "Location>function @construct(int offset, int line, int column) {\n", "this.offset = offset; this.line = line; this.column = column;\n", "}\n", "}\n\n", "class ", this.parserClass, "Error inherits ", this.parserClass, "Location {\n", "bound public int code = 0;\n", "bound public string found = 0;\n", "bound public string expected = 0;\n", "bound public int vested = 0;\n", "bound public int depth = 0;\n", "bound public <", this.parserClass, "Error>array path = new <", this.parserClass, "Error>array();\n", "bound public <", this.parserClass, "Error>function clone() {var ", this.parserClass, "Error clone = new ", this.parserClass, "Error(this.offset, this.line, this.column); clone.code = this.code; clone.found = this.found; clone.expected = this.expected; clone.vested = this.vested; for (var int i in this.path) {var ", this.parserClass, "Error current = this.path[i]; clone.path.push(current.clone());} return clone;}", "}\n\n", "class <class T>", this.parserClass, "Output {\n", "	fixed public <<T>", this.parserClass, "Output>function @construct(bool hadError, ", this.parserClass, "Error error, map data) {this.hadError = hadError; this.error = error; this.data = data;}\n", "	bound public ", this.parserClass, "Error error = empty;\n", "	bound public bool hadError = false;\n", "	bound public map data = new map();\n", "}\n", "class ", this.parserClass, " inherits ", this.parserClass, "Location {\n", "fixed public override <", this.parserClass, ">function @construct() {}\n", "fixed public <<", outputType, ">", this.parserClass, "Output>function parse(string input) {", "	var <", outputType, ">", this.parserClass, " parser = new <", outputType, ">", this.parserClass, "();\n", "	var ", outputType, " output = parser.start(input);\n", "	parser.error = parser.deepError;\n", "	if (parser.hadError and (parser.error.found == string.fromCharCode(0001))) {\n", "		parser.error.found = \"End of input\";\n", "	}\n", "	for (var int i = 0; i < parser.error.offset; i++) {\n", "		parser.error.column++;\n", "		if (i < parser.currentInput.length)", "		if (parser.currentInput[i] == \"\\n\") {parser.error.line++; parser.error.column = 0;}\n", "	}\n", "	var <", outputType, ">", this.parserClass, "Output rtn = new <", outputType, ">", this.parserClass, "Output(parser.hadError, parser.error, parser.data[\"data\"]);\n", "	return rtn;\n", "}\n", "fixed public <<", outputType, ">", this.parserClass, "Output>function parse(string rule, string input) {", "	var <", outputType, ">", this.parserClass, " parser = new <", outputType, ">", this.parserClass, "();\n", "	input += string.fromCharCode(0001);\n", "	parser.currentInput = input;\n", "	parser.data[\"data\"] = new ", outputType, "();\n", "	var <", outputType, ">", this.parserClass, "Output output = null;\n", "	", ruleChecks.join("else"), "	parser.error = parser.deepError;\n", "\n	if (parser.lastErrors.length > 0) {parser.error = parser.lastErrors[0];}", "\n	if (parser.hadError and (parser.error.found == string.fromCharCode(0001))) {\n", "		parser.error.found = \"End of input\";\n", "	}\n", "	for (var int i = 0; i < parser.error.offset; i++) {\n", "		parser.error.column++;\n", "		if (i < parser.currentInput.length)", "		if (parser.currentInput[i] == \"\\n\") {parser.error.line++; parser.error.column = 0;}\n", "	}\n", "	var <", outputType, ">", this.parserClass, "Output rtn = new <", outputType, ">", this.parserClass, "Output(output.hadError, output.error, output.data);\n", "	return rtn;\n", "}\n", "bound public <", this.parserClass, "Error>array lastErrors = new <", this.parserClass, "Error>array();\n", "bound public bool hadError = false;\n", "bound public int parsedChars = 0;\n", "bound public int depth = 0;\n", "bound public string currentInput = new string();\n", "bound public map data = new map();\n", "bound public ", this.parserClass, "Error deepError = new ", this.parserClass, "Error(0, 0, 0);\n", "bound public ", this.parserClass, "Error error = new ", this.parserClass, "Error(0, 0, 0);\n", "bound public <<", this.parserClass, "Error>array>array errors = new <<", this.parserClass, "Error>array>array();\n", "bound public <string>function assembleCodes(<int>array codes) {\n", "	var string rtn = new string();\n", "	for (var int i in codes) {\n", "		rtn += string.fromCharCode(codes[i]);\n", "	}\n", "	return rtn;", "}\n", "bound public <void>function groupErrors() {\n", "	", "}\n", "bound public <void>function popGroup() {\n", "	", "}\n", "bound public <void>function giveError(int code, string expected, string found) {\n", "	this.hadError = true;\n", "	this.error.code = code;\n", "	this.error.expected = expected;\n", "	this.error.found = found;\n", "	this.error.offset = this.offset;\n", "	this.error.line = 1;\n", "	this.error.column = 0;\n", "	if (this.deepError == null or this.depth > this.deepError.depth) {\n", "		var err = new ", this.parserClass, "Error(0, 0, 0);\n", "		err.code = code;\n", "		err.expected = expected;\n", "		err.found = found;\n", "		err.offset = this.offset;\n", "		err.line = 1;\n", "		err.column = 0;\n", "		err.depth = this.depth;\n", "		this.deepError = err;\n", "	}\n", "}\n\n", "bound public <void>function start(string input) {\n", "	this.currentInput = input;\n", "	input += string.fromCharCode(0001);", "	this.data[\"data\"] = new ", outputType, "();\n", "	var ", outputType, " data = this.data[\"data\"];\n", "	var int c = 0;\n", "	", initializer, "\n", "	", this.captures.join("\n"), "	", startRule.initializers.join(""), "	var int literalChar = 0;\n", "	Exception.try();\n", "	for (var int charPos = 0; charPos < input.length(); charPos++) {\n", "		var string currentChar = input[charPos];\n", "		var int currentCode = input.charCodeAt(charPos);\n", "		if (c == 0 - 1) {if (currentChar != string.fromCharCode(0001)) {this.giveError(2, \"EOF\", currentChar);}}\n", "		if (currentCode == 10) {this.line++; this.column = 0;}\n", "		", ruleOutput.join("\n\n"), "		this.offset++; \n this.column++;\n", "		if (this.hadError) {break;}\n", "	}\n", "	Exception.endTry();\n", "	for (var int i = 0; i < this.error.offset; i++) {\n", "		this.error.column++;\n", "		if (i < this.currentInput.length)", "		if (this.currentInput[i] == \"\\n\") {this.error.line++; this.error.column = 0;}\n", "	}\n", "	if (false and this.hadError == false) {\n", "		if (this.offset < input.length() - 1) {\n", "			this.giveError(2, \"EOF\", input[this.offset + 1]);", "		}\n", "	}\n", "}\n", this.doOtherRules(), "}"];
 		return output.join("");
 	}
 }
