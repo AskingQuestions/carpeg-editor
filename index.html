@@ -176,22 +176,80 @@ int|Json_Number = nums: [0-9-.]++ {int|export = string.parseInt($nums);};`
 			}
 		}
 
+		function buildCarbonite(str, platform) {
+			let c = new Carbonite.Compiler();
+			c.addNativeLibrary();
+
+			let main = c.addSource("main", str);
+			main.file = "main";
+			main.process();
+
+			c.build(platform || "javascript.source.memory", {});
+
+			if (c.status.hadError)
+				console.error(c.status.firstError.stringify());
+			
+			return {code: c.rawOutput, error: c.status.hadError ? c.status.firstError.stringify() : false};
+		}
+
+		function buildCpegGrammar(str, name) {
+			let grammar = new Carpeg.grammar(str);
+			grammar.parserClass = name || "DemoParser";
+			try {
+				var carbonOutput = grammar.generate();
+			}catch(e) {
+				return {code: "", error: e.toString()}
+			}
+			
+			return buildCarbonite(carbonOutput);
+		}
+
+		function loadScript(src, callback) {
+			var scr = document.createElement("script");
+			scr.src = src;
+			scr.onload = callback;
+			document.body.appendChild(scr);
+		}
+
 		function buildGrammar() {
-			let worker = new Worker("worker.js");
-			$(".progress").show();
-			var old = Date.now();
-			worker.onmessage = function(code) {
-				$(".progress").hide();
-				if (code.data.error === false) {
-					M.toast({html: "<span class='green-text'>Success.</span><label>Built in " + ((Date.now() - old) / 1000).toFixed(1) + "s</label>"});
-					eval(code.data.code);
-					reParse();
-					if (download)
-						downloadFile(code.data.code, parserName + "." + fileExt);
-				}else
-					giveError(code.data.error);
-			};
-			worker.postMessage({grammar: editor.getValue(), name: parserName});
+			try {
+				let worker = new Worker("worker.js");
+				$(".progress").show();
+				var old = Date.now();
+				worker.onmessage = function(code) {
+					$(".progress").hide();
+					if (code.data.error === false) {
+						M.toast({html: "<span class='green-text'>Success.</span><label>Built in " + ((Date.now() - old) / 1000).toFixed(1) + "s</label>"});
+						eval(code.data.code);
+						reParse();
+						if (download)
+							downloadFile(code.data.code, parserName + "." + fileExt);
+					}else
+						giveError(code.data.error);
+				};
+				worker.postMessage({grammar: editor.getValue(), name: parserName});
+			}catch (e) {
+				loadScript("carbonite.js", () => {
+					loadScript("carpeg.js", () => {
+						$(".progress").show();
+						setTimeout(() => {
+							var old = Date.now();
+							
+							var code = buildCpegGrammar(editor.getValue(), parserName);
+
+							$(".progress").hide();
+							if (code.error === false) {
+								M.toast({html: "<span class='green-text'>Success.</span><label>Built in " + ((Date.now() - old) / 1000).toFixed(1) + "s</label>"});
+								eval(code.code);
+								reParse();
+								if (download)
+									downloadFile(code.code, parserName + "." + fileExt);
+							}else
+								giveError(code.error);
+						});
+					});
+				});
+			}
 		}
 
 		M.AutoInit();
