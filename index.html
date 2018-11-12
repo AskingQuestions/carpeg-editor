@@ -37,6 +37,7 @@
 				<div class="pane vertical grey darken-3">
 					<div class="pane" id="input"></div>
 					<div class="pane grey darken-4">
+							<div class="card" style="float: right; margin: .2em 2em;"><span class="green-text">Parsed</span> ( <span id="parseTime" class="">0</span>ms ) <span class="green-text">Rendered</span> ( <span id="renderTime" class="">0</span>ms )</div>
 						<pre id="output" class="white-text json-body"></pre>
 					</div>
 				</div>
@@ -166,13 +167,18 @@ int|Json_Number = nums: [0-9-.]++ {int|export = string.parseInt($nums);};`
 				giveError("warning: The grammar is unbuilt, press <i style='vertical-align: bottom;' class='material-icons'>edit</i> -> <i style='vertical-align: bottom;' class='material-icons'>play_arrow</i>");
 				return;
 			}
-			
+			let start = Date.now();
 			let out = DemoParser.parse(input.getValue());
+			let end = Date.now();
+			$("#parseTime").html(end - start);
 			if (out.hadError)
 				giveError("Parse error: Expected '" + out.error.expected + "' found '" + out.error.found + "' at " + out.error.line + ":" + out.error.column);
 			else {
 				giveError(false);
+				let rStart = Date.now();
 				$('#output').jsonBrowse(out.data);
+				let rEnd = Date.now();
+				$("#renderTime").html(rEnd - rStart);
 			}
 		}
 
